@@ -21,7 +21,6 @@ defmodule Server do
 
   # _________________________________________________________ next()
   def next(s) do
-
     s = receive do
       {:SEND_HEARTBEAT} ->
         if s.role == :LEADER do
@@ -30,6 +29,7 @@ defmodule Server do
           end
           Process.send_after(s.selfP, {:SEND_HEARTBEAT}, 100)
         end
+        s
       # Heartbeat request from leader
       {:HEARTBEAT_REQUEST, leaderP} ->
         s = s
@@ -67,7 +67,7 @@ defmodule Server do
             s
         end
 
-      {:VOTE_REPLY, msg} ->
+      {:VOTE_REPLY, msg} when s.role == :CANDIDATE ->
         s = if msg.curr_term == s.curr_term do
           s
           |> State.add_to_voted_by(msg.voteP)
@@ -77,8 +77,12 @@ defmodule Server do
         if State.vote_tally(s) >= s.majority do
           # leadership achieved start heartbeat
           Process.send_after(s.selfP, {:SEND_HEARTBEAT}, 100)
-          Monitor.send_msg(s, {:PRINT, s.curr_term, "won by #{s.selfP}"})
+          Monitor.send_msg(s, {:PRINT, s.curr_term, "won by #{s.server_num}"})
         end
+        s |> State.role(:LEADER)
+
+      {:VOTE_REPLY, msg} ->
+        s
 
       # Followers election timer expires
       {:ELECTION_TIMEOUT, msg} when s.role == :FOLLOWER ->
@@ -90,6 +94,7 @@ defmodule Server do
             |> State.new_voted_by()
             |> State.add_to_voted_by(s.selfP)
             |> Timer.restart_election_timer()
+        Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} standing for election"})
 
         # Broadcast message to all servers
         for server when server != s.selfP <- s.servers do
