@@ -24,3 +24,7 @@ raft-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Idea configuration files
+.idea
+raft.iml
