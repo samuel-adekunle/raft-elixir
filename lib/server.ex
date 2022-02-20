@@ -53,7 +53,7 @@ defmodule Server do
               |> State.leaderP(leaderP)
               |> Timer.restart_election_timer()
 
-        send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
+          send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
 
           if old_s.role == :CANDIDATE do
             Monitor.send_msg(old_s, {:PRINT, old_s.curr_term, ": #{old_s.server_num} steps down from election"})
@@ -126,7 +126,7 @@ defmodule Server do
 
       # Vote Request from Candidate as leader
       {:VOTE_REQUEST, msg} when s.role == :LEADER ->
-        send msg.candidateP, {:HEARTBEAT_REQUEST, s.selfP}
+        send msg.candidateP, {:HEARTBEAT_REQUEST, s.selfP, s.curr_term}
         s
 
       # Vote reply when candidate
@@ -142,7 +142,7 @@ defmodule Server do
           s = s
               |> State.role(:LEADER)
           Process.send_after(s.selfP, {:SEND_HEARTBEAT}, s.config.heartbeat_interval)
-          Monitor.send_msg(s, {:PRINT, s.curr_term, "won by #{s.server_num}"})
+          Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} won election"})
           s
         else
           s
@@ -166,7 +166,7 @@ defmodule Server do
           send server, {:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}}
         end
 
-        Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} standing for election"})
+        Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} stands for election"})
         s
 
       # Election timeout when candidate
@@ -212,7 +212,7 @@ defmodule Server do
       # TODO: everything above here
 
       {:CRASH, duration} ->
-        Helper.node_restart_after("restarting #{s.server_num}", duration)
+        Helper.node_restart_after("#{s.server_num}", duration)
         s
 
       unexpected ->
