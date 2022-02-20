@@ -14,16 +14,10 @@ defmodule Server do
 
     receive do
       {:BIND, servers, databaseP} ->
-        s = State.initialise(config, server_num, servers, databaseP)
-            |> Timer.restart_election_timer()
-
-        {crash_time, crash_duration} = config.crash_servers[server_num]
-
-        if crash_time != nil do
-          Process.send_after(s.selfP, {:CRASH, crash_duration}, crash_time)
-        end
-
-        Server.next(s)
+        State.initialise(config, server_num, servers, databaseP)
+        |> Timer.start_crash_timer()
+        |> Timer.restart_election_timer()
+        |> Server.next()
     end # receive
   end # start
 
@@ -85,6 +79,14 @@ defmodule Server do
       # Crashes if received as candidate or follower
       {:HEARTBEAT_REPLY, serverP} when s.role == :LEADER ->
         s
+
+      # Crash server request
+      # Simulates servers temporarily dropping out of the network then rejoining
+      {:CRASH, duration} ->
+        crash(duration)
+        s
+        |> Timer.cancel_crash_timer()
+        |> Monitor.send_msg({:PRINT, s.curr_term, ": #{s.server_num} crashing for #{duration}ms"})
 
       # Append Entries request from leader
       # Crashes if received as a leader
@@ -213,12 +215,6 @@ defmodule Server do
       {:CLIENT_REQUEST, msg} when s.role == :CANDIDATE ->
         s
 
-      # TODO: everything above here
-
-      {:CRASH, duration} ->
-        Helper.node_restart_after("#{s.server_num}", duration)
-        s
-
       unexpected ->
         Helper.node_halt(inspect unexpected)
         s
@@ -229,7 +225,10 @@ defmodule Server do
 
   end # next
 
-  # _________________________________________________________ send_
+  # _________________________________________________________ crash
+  def crash(duration) do
+    Process.sleep duration
+  end # crash
 
 end # Server
 

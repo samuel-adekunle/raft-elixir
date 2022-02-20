@@ -60,7 +60,7 @@ defmodule Configuration do
       monitor_interval: 500, # interval(ms) between monitor summaries
 
       crash_servers: %{
-        # server_num => crash_after_time (ms), ..
+        # server_num => {crash_time, crash_duration} (ms)
         1 => {1_000, 1_000},
         2 => {2_000, 1_000},
         3 => {3_000, 1_000},

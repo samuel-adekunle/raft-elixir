@@ -31,6 +31,8 @@ defmodule State do
 
       heartbeat_timer: nil, # timer for sending heartbeats as leader
 
+      crash_timer: nil, # timer for temporarily crashing servers
+
       leaderP: nil, # included in reply to client request
 
       # _______________raft paper state variables___________________
@@ -61,6 +63,7 @@ defmodule State do
   def vote_tally(s), do: MapSet.size(s.voted_by)
 
   def heartbeat_timer(s, v), do: Map.put(s, :heartbeat_timer, v)
+  def crash_timer(s, v), do: Map.put(s, :crash_timer, v)
 
   def append_entries_timers(s),
       do: Map.put(s, :append_entries_timers, Map.new)

@@ -87,4 +87,32 @@ defmodule Timer do
     s
     |> State.heartbeat_timer(nil)
   end # cancel_heartbeat_timer
+
+  # _________________________________________________________ start_crash_timer
+  def start_crash_timer(s) do
+    {crash_time, crash_duration} = s.config.crash_servers[s.server_num]
+
+    if crash_time != nil do
+      crash_timer = Process.send_after(
+        s.selfP,
+        {:CRASH, crash_duration},
+        crash_time
+      )
+
+      s
+      |> State.crash_timer(crash_timer)
+    else
+      s
+    end
+  end # start_crash_timer
+
+  # _________________________________________________________ cancel_crash_timer
+  def cancel_crash_timer(s) do
+    if s.crash_timer do
+      Process.cancel_timer(s.crash_timer)
+    end
+    s
+    |> State.crash_timer(nil)
+  end # cancel_crash_timer
+
 end # Timer
