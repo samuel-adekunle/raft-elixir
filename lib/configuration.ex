@@ -1,5 +1,6 @@
 # distributed algorithms, n.dulay, 8 feb 2022
 # raft, configuration parameters v2
+# modified by Samuel Adekunle (sja119) and Neel Dugar (nd1412), 20 feb 2022
 
 defmodule Configuration do
 
