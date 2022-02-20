@@ -54,6 +54,7 @@ defmodule Configuration do
 
       election_timeout_range: 150..300, # timeout(ms) for election, set randomly in range
       append_entries_timeout: 10, # timeout(ms) for the reply to a append_entries request
+
       heartbeat_interval: 50, # interval(ms) for leader heartbeat messages
 
       monitor_interval: 500, # interval(ms) between monitor summaries

@@ -35,11 +35,13 @@ defmodule Server do
         for server when server != s.selfP <- s.servers do
           send server, {:HEARTBEAT_REQUEST, s.selfP, s.curr_term}
         end
-        Process.send_after(s.selfP, {:SEND_HEARTBEAT}, s.config.heartbeat_interval)
         s
+        |> Timer.restart_heartbeat_timer()
 
-      # Broadcast heartbeat when no longer leader, ignore
-      {:SEND_HEARTBEAT} when s.role != :LEADER -> s
+      # Broadcast heartbeat when no longer leader, cancel heartbeat timer
+      {:SEND_HEARTBEAT} when s.role != :LEADER ->
+        s
+        |> Timer.cancel_heartbeat_timer()
 
       # Heartbeat request from leader when not leader
       # Should step down if candidate
@@ -72,6 +74,7 @@ defmodule Server do
               |> State.role(:FOLLOWER)
               |> State.curr_term(leader_term)
               |> State.leaderP(leaderP)
+              |> Timer.cancel_election_timer()
               |> Timer.restart_election_timer()
           send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
           Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} got evicted"})
@@ -142,7 +145,7 @@ defmodule Server do
         if State.vote_tally(s) >= s.majority do
           s = s
               |> State.role(:LEADER)
-          Process.send_after(s.selfP, {:SEND_HEARTBEAT}, s.config.heartbeat_interval)
+              |> Timer.restart_heartbeat_timer()
           Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} won election"})
           s
         else

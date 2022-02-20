@@ -29,6 +29,8 @@ defmodule State do
 
       append_entries_timers: Map.new, # one timer for each follower
 
+      heartbeat_timer: nil, # timer for sending heartbeats as leader
+
       leaderP: nil, # included in reply to client request
 
       # _______________raft paper state variables___________________
@@ -57,6 +59,8 @@ defmodule State do
   def new_voted_by(s), do: Map.put(s, :voted_by, MapSet.new)
   def add_to_voted_by(s, v), do: Map.put(s, :voted_by, MapSet.put(s.voted_by, v))
   def vote_tally(s), do: MapSet.size(s.voted_by)
+
+  def heartbeat_timer(s, v), do: Map.put(s, :heartbeat_timer, v)
 
   def append_entries_timers(s),
       do: Map.put(s, :append_entries_timers, Map.new)
