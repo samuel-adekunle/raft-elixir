@@ -43,4 +43,9 @@ def node_sleep(message) do
   Process.sleep :infinity
 end # node_sleep
 
+def node_restart_after(message, duration) do
+  IO.puts "Node #{node()} Going to Sleep for #{duration} - #{message}"
+  Process.sleep duration
+end
+
 end # Helper

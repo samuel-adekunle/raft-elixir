@@ -13,9 +13,16 @@ defmodule Server do
 
     receive do
       {:BIND, servers, databaseP} ->
-        State.initialise(config, server_num, servers, databaseP)
-        |> Timer.restart_election_timer()
-        |> Server.next()
+        s = State.initialise(config, server_num, servers, databaseP)
+            |> Timer.restart_election_timer()
+
+        {crash_time, crash_duration} = config.crash_servers[server_num]
+
+        if crash_time != nil do
+          Process.send_after(s.selfP, {:CRASH, crash_duration}, crash_time)
+        end
+
+        Server.next(s)
     end # receive
   end # start
 
@@ -23,6 +30,7 @@ defmodule Server do
   def next(s) do
     s = receive do
       # Broadcast heartbeat as leader
+      # Crashes if received as candidate or follower
       {:SEND_HEARTBEAT} when s.role == :LEADER ->
         for server when server != s.selfP <- s.servers do
           send server, {:HEARTBEAT_REQUEST, s.selfP}
@@ -30,74 +38,99 @@ defmodule Server do
         Process.send_after(s.selfP, {:SEND_HEARTBEAT}, s.config.heartbeat_interval)
         s
 
-      # Heartbeat request from leader
-      {:HEARTBEAT_REQUEST, leaderP} ->
-          Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} stepping down"})
+      # Heartbeat request from leader (becomes a follower)
+      # Crashes if received as a leader
+      # Should step down if candidate
+      {:HEARTBEAT_REQUEST, leaderP} when s.role != :LEADER ->
+        old_s = s
         s = s
             |> State.role(:FOLLOWER)
             |> State.leaderP(leaderP)
             |> Timer.restart_election_timer()
 
         send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
+
+        if old_s.role == :CANDIDATE do
+          Monitor.send_msg(old_s, {:PRINT, old_s.curr_term, "#{old_s.server_num} stepping down from election"})
+        end
         s
 
-      # Heartbeat reply from followers
-      {:HEARTBEAT_REPLY, serverP} -> s
+      # Heartbeat reply from followers which is ignored
+      # Crashes if received as candidate or follower
+      {:HEARTBEAT_REPLY, serverP} when s.role == :LEADER ->
+        s
 
       # Append Entries request from leader
-      {:APPEND_ENTRIES_REQUEST, msg} -> s
+      # Crashes if received as a leader
+      # Should step down if candidate
+      # TODO
+      {:APPEND_ENTRIES_REQUEST, msg} when s.role != :LEADER ->
+        s
 
-      {:APPEND_ENTRIES_REPLY, msg} -> s
+      # Append Entries reply from followers
+      # Crashes if received as candidate or follower
+      # TODO
+      {:APPEND_ENTRIES_REPLY, msg} when s.role == :LEADER ->
+        s
 
-      # Vote Request from Candidate
-      {:VOTE_REQUEST, msg} ->
-        # TODO: Check against log index -> (voted_for = NIL MUST DO)
-        Monitor.send_msg(
-          s,
-          {
-            :PRINT,
-            s.curr_term,
-            ": #{s.server_num}-> received votereq from #{msg.debugC} for term #{msg.candidate_term}"
-          }
-        )
+      # Append Entries timeout as leader
+      # Crashes if received as candidate or follower
+      # TODO
+      {:APPEND_ENTRIES_TIMEOUT, msg} when s.role == :LEADER ->
+        s
 
+      # Vote Request from Candidate when not leader
+      # TODO: Check against log index -> (voted_for = NIL MUST DO)
+      {:VOTE_REQUEST, msg} when s.role != :LEADER ->
         case {msg.candidate_term, s.voted_for} do
           {c_term, _} when c_term > s.curr_term ->
             s = s
-            |> State.curr_term(c_term)
-            |> State.voted_for(msg.candidateP)
-            |> Timer.restart_election_timer()
-            Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num}-> votes for #{msg.debugC}"})
+                |> State.curr_term(c_term)
+                |> State.voted_for(msg.candidateP)
+                |> Timer.restart_election_timer()
             send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term, debugV: s.server_num}})
+            Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} votes for #{msg.debugC}"})
             s
           {c_term, nil} when c_term == s.curr_term ->
+            s = s
+                |> State.voted_for(msg.candidateP)
+                |> Timer.restart_election_timer()
             send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term, debugV: s.server_num}})
+            Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} votes for #{msg.debugC}"})
             s
-            |> State.voted_for(msg.candidateP)
-            |> Timer.restart_election_timer()
           _ ->
             s
         end
 
+      # Vote Request from Candidate as leader
+      {:VOTE_REQUEST, msg} when s.role == :LEADER ->
+        send msg.candidateP, {:HEARTBEAT_REQUEST, s.selfP}
+        s
+
+      # Vote reply when candidate
       {:VOTE_REPLY, msg} when s.role == :CANDIDATE ->
         s = if msg.curr_term == s.curr_term do
-          Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} received vote from #{msg.debugV}"})
           s
           |> State.add_to_voted_by(msg.voteP)
         else
           s
         end
+
         if State.vote_tally(s) >= s.majority do
-          # leadership achieved start heartbeat
+          s = s
+              |> State.role(:LEADER)
           Process.send_after(s.selfP, {:SEND_HEARTBEAT}, s.config.heartbeat_interval)
           Monitor.send_msg(s, {:PRINT, s.curr_term, "won by #{s.server_num}"})
+          s
+        else
+          s
         end
-        s
-        |> State.role(:LEADER)
 
-      {:VOTE_REPLY, msg} ->
+      # Vote reply when no longer candidate, ignore
+      {:VOTE_REPLY, msg} when s.role != :CANDIDATE ->
         s
-      # Followers election timer expires
+
+      # Election timeout when follower
       {:ELECTION_TIMEOUT, msg} when s.role == :FOLLOWER ->
         # Start a new election
         s = s
@@ -105,22 +138,29 @@ defmodule Server do
             |> State.role(:CANDIDATE)
             |> State.new_voted_by()
             |> Timer.restart_election_timer()
-        Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} standing for election"})
+
         # Broadcast message to all servers
         for server <- s.servers do
           send server, {:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}}
         end
+
+        Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} standing for election"})
         s
 
+      # Election timeout when candidate
       {:ELECTION_TIMEOUT, msg} when s.role == :CANDIDATE ->
+        s = s
+            |> State.role(:FOLLOWER)
+            |> Timer.restart_election_timer()
+
         Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} dropping down from election"})
+
+
+      # Election timeout when leader, ignore
+      {:ELECTION_TIMEOUT, msg} when s.role == :LEADER ->
         s
-        |> State.role(:FOLLOWER)
-        |> Timer.restart_election_timer()
 
-      {:ELECTION_TIMEOUT, msg} when s.role == :LEADER -> s
-
-      {:APPEND_ENTRIES_TIMEOUT, msg} -> s
+      # TODO: everything below here
 
       # Client Request to leader
       {:CLIENT_REQUEST, msg} when s.role == :LEADER ->
@@ -144,7 +184,14 @@ defmodule Server do
         s
 
       # Client Request to candidate gets dropped (or possibly queued)
-      {:CLIENT_REQUEST, msg} when s.role == :CANDIDATE -> s
+      {:CLIENT_REQUEST, msg} when s.role == :CANDIDATE ->
+        s
+
+      # TODO: everything above here
+
+      {:CRASH, duration} ->
+        Helper.node_restart_after("restarting #{s.server_num}", duration)
+        s
 
       unexpected ->
         Helper.node_halt(inspect unexpected)
