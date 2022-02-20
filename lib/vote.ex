@@ -13,12 +13,16 @@ defmodule Vote do
     |> Server.broadcast({:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}})
   end # send_vote_request
 
-  # _________________________________________________________ receive_vote_reply
-  def receive_vote_reply(s, vote) do
-    s
-    |> add_vote(vote)
-    |> tally_votes()
-  end # receive_vote_reply
+  # _________________________________________________________ handle_vote_reply
+  def handle_vote_reply(s, vote) do
+    if s.role != :CANDIDATE do
+      s
+    else
+      s
+      |> add_vote(vote)
+      |> tally_votes()
+    end
+  end # handle_vote_reply
 
   # _________________________________________________________ send_vote_reply
   def send_vote_reply(s, req) do
@@ -31,9 +35,9 @@ defmodule Vote do
     s
   end # send_vote_reply
 
-  # _________________________________________________________ receive_request_send_reply
+  # _________________________________________________________ handle_request_send_reply
   # TODO: Check against log index
-  def receive_request_send_reply(s, req) do
+  def handle_request_send_reply(s, req) do
     case {req.candidate_term, s.voted_for} do
       {c_term, _} when c_term > s.curr_term ->
         s
@@ -46,7 +50,7 @@ defmodule Vote do
 
       _ -> s
     end
-  end # receive_request_send_reply
+  end # handle_request_send_reply
 
   # _________________________________________________________ step_down
   def step_down(s) do

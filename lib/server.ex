@@ -27,59 +27,28 @@ defmodule Server do
       # Broadcast heartbeat request when leader
       {:SEND_HEARTBEAT} when s.role == :LEADER ->
         s
-        |> broadcast({:HEARTBEAT_REQUEST, s.selfP, s.curr_term})
-        |> Timer.restart_heartbeat_timer()
+        |> Heartbeat.handle_send_heartbeat_send_request()
 
       # Broadcast heartbeat when not leader
       {:SEND_HEARTBEAT} when s.role != :LEADER ->
         s
         |> Timer.cancel_heartbeat_timer()
 
-      # Heartbeat request when not leader
-      {:HEARTBEAT_REQUEST, leaderP, leader_term} when s.role != :LEADER ->
-        if s.curr_term > leader_term do
-          s
-        else
-          if s.role == :CANDIDATE do
-            print(s, "#{s.server_num} steps down from election")
-          end
-
-          send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
-
-          s
-          |> State.role(:FOLLOWER)
-          |> State.curr_term(leader_term)
-          |> State.leaderP(leaderP)
-          |> Timer.restart_election_timer()
-        end
-
-      # Heartbeat request when leader
-      {:HEARTBEAT_REQUEST, leaderP, leader_term} when s.role == :LEADER ->
-        if s.curr_term > leader_term do
-          s
-        else
-          s = s
-              |> State.role(:FOLLOWER)
-              |> State.curr_term(leader_term)
-              |> State.leaderP(leaderP)
-              |> Timer.cancel_election_timer()
-              |> Timer.restart_election_timer()
-              |> print("#{s.server_num} got evicted")
-
-          send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
-          s
-        end
+      # Heartbeat request
+      {:HEARTBEAT_REQUEST, req} ->
+        s
+        |> Heartbeat.handle_request_send_reply(req)
 
       # Heartbeat reply when leader
       # Crashes if received as candidate or follower
-      {:HEARTBEAT_REPLY, _serverP} when s.role == :LEADER -> s
+      {:HEARTBEAT_REPLY, _serverP} when s.role == :LEADER ->
+        s
+        |> Heartbeat.handle_heartbeat_reply()
 
       # Crash request
       {:CRASH, duration} ->
         s
         |> crash(duration)
-        |> print("#{s.server_num} crashing for #{duration}ms")
-        |> Timer.cancel_crash_timer()
 
       # Append Entries request when not leader
       # Crashes if received as a leader
@@ -99,20 +68,17 @@ defmodule Server do
       # Vote Request when not leader
       {:VOTE_REQUEST, msg} when s.role != :LEADER ->
         s
-        |> Vote.receive_request_send_reply(msg)
+        |> Vote.handle_request_send_reply(msg)
 
       # Vote Request when leader
       {:VOTE_REQUEST, req} when s.role == :LEADER ->
         s
         |> Heartbeat.send_heartbeat_request(req)
 
-      # Vote reply when candidate
-      {:VOTE_REPLY, vote} when s.role == :CANDIDATE ->
+      # Vote reply
+      {:VOTE_REPLY, vote} ->
         s
-        |> Vote.receive_vote_reply(vote)
-
-      # Vote reply when not candidate
-      {:VOTE_REPLY, _msg} when s.role != :CANDIDATE -> s
+        |> Vote.handle_vote_reply(vote)
 
       # Election timeout when follower
       {:ELECTION_TIMEOUT, _msg} when s.role == :FOLLOWER ->
@@ -169,6 +135,8 @@ defmodule Server do
   def crash(s, duration) do
     Process.sleep duration
     s
+    |> print("#{s.server_num} crashing for #{duration}ms")
+    |> Timer.cancel_crash_timer()
   end # crash
 
 end # Server
