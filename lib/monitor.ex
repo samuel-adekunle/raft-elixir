@@ -88,12 +88,12 @@ defmodule Monitor do
         sorted = m.requests
                  |> Map.to_list
                  |> List.keysort(0)
+        IO.puts ""
         IO.puts "  time = #{clock} client requests seen = #{inspect sorted}"
         sorted = m.updates
                  |> Map.to_list
                  |> List.keysort(0)
         IO.puts "  time = #{clock}      db updates done = #{inspect sorted}"
-
         IO.puts ""
         Process.send_after(self(), {:PRINT}, m.config.monitor_interval)
         m
