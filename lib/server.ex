@@ -32,8 +32,6 @@ defmodule Server do
 
       # Heartbeat request from leader
       {:HEARTBEAT_REQUEST, leaderP} ->
-        if s.role != :FOLLOWER do        end
-
           Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} stepping down"})
         s = s
             |> State.role(:FOLLOWER)
@@ -59,20 +57,21 @@ defmodule Server do
           {
             :PRINT,
             s.curr_term,
-            ": #{s.server_num}-> received votereq from #{inspect msg.candidateP} for term #{msg.candidate_term}}"
+            ": #{s.server_num}-> received votereq from #{msg.debugC} for term #{msg.candidate_term}"
           }
         )
 
         case {msg.candidate_term, s.voted_for} do
           {c_term, _} when c_term > s.curr_term ->
-            Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num}-> votes for #{inspect msg.candidateP}"})
-            send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term}})
-            s
+            s = s
             |> State.curr_term(c_term)
             |> State.voted_for(msg.candidateP)
             |> Timer.restart_election_timer()
+            Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num}-> votes for #{msg.debugC}"})
+            send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term, debugV: s.server_num}})
+            s
           {c_term, nil} when c_term == s.curr_term ->
-            send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term}})
+            send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term, debugV: s.server_num}})
             s
             |> State.voted_for(msg.candidateP)
             |> Timer.restart_election_timer()
@@ -82,7 +81,7 @@ defmodule Server do
 
       {:VOTE_REPLY, msg} when s.role == :CANDIDATE ->
         s = if msg.curr_term == s.curr_term do
-          Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} voted for by #{inspect msg.voteP}"})
+          Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} received vote from #{msg.debugV}"})
           s
           |> State.add_to_voted_by(msg.voteP)
         else
@@ -98,21 +97,18 @@ defmodule Server do
 
       {:VOTE_REPLY, msg} ->
         s
-
       # Followers election timer expires
       {:ELECTION_TIMEOUT, msg} when s.role == :FOLLOWER ->
         # Start a new election
         s = s
             |> State.inc_term()
             |> State.role(:CANDIDATE)
-            |> State.voted_for(s.selfP)
             |> State.new_voted_by()
-            |> State.add_to_voted_by(s.selfP)
             |> Timer.restart_election_timer()
-        Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} standing for election"})
+        Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} standing for election"})
         # Broadcast message to all servers
-        for server when server != s.selfP <- s.servers do
-          send server, {:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term}}
+        for server <- s.servers do
+          send server, {:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}}
         end
         s
 
