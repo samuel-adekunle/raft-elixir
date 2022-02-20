@@ -29,31 +29,53 @@ defmodule Server do
   # _________________________________________________________ next()
   def next(s) do
     s = receive do
-      # Broadcast heartbeat as leader
-      # Crashes if received as candidate or follower
+      # Broadcast heartbeat request when leader
       {:SEND_HEARTBEAT} when s.role == :LEADER ->
         for server when server != s.selfP <- s.servers do
-          send server, {:HEARTBEAT_REQUEST, s.selfP}
+          send server, {:HEARTBEAT_REQUEST, s.selfP, s.curr_term}
         end
         Process.send_after(s.selfP, {:SEND_HEARTBEAT}, s.config.heartbeat_interval)
         s
 
-      # Heartbeat request from leader (becomes a follower)
-      # Crashes if received as a leader
+      # Broadcast heartbeat when no longer leader, ignore
+      {:SEND_HEARTBEAT} when s.role != :LEADER -> s
+
+      # Heartbeat request from leader when not leader
       # Should step down if candidate
-      {:HEARTBEAT_REQUEST, leaderP} when s.role != :LEADER ->
-        old_s = s
-        s = s
-            |> State.role(:FOLLOWER)
-            |> State.leaderP(leaderP)
-            |> Timer.restart_election_timer()
+      {:HEARTBEAT_REQUEST, leaderP, leader_term} when s.role != :LEADER ->
+        if s.curr_term > leader_term do
+          s
+        else
+          old_s = s
+          s = s
+              |> State.role(:FOLLOWER)
+              |> State.curr_term(leader_term)
+              |> State.leaderP(leaderP)
+              |> Timer.restart_election_timer()
 
         send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
 
-        if old_s.role == :CANDIDATE do
-          Monitor.send_msg(old_s, {:PRINT, old_s.curr_term, "#{old_s.server_num} stepping down from election"})
+          if old_s.role == :CANDIDATE do
+            Monitor.send_msg(old_s, {:PRINT, old_s.curr_term, ": #{old_s.server_num} steps down from election"})
+          end
+          s
         end
-        s
+
+      # Heartbeat request when leader
+      # Should decide if it is the true leader or not
+      {:HEARTBEAT_REQUEST, leaderP, leader_term} when s.role == :LEADER ->
+        if s.curr_term > leader_term do
+          s
+        else
+          s = s
+              |> State.role(:FOLLOWER)
+              |> State.curr_term(leader_term)
+              |> State.leaderP(leaderP)
+              |> Timer.restart_election_timer()
+          send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
+          Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} got evicted"})
+          s
+        end
 
       # Heartbeat reply from followers which is ignored
       # Crashes if received as candidate or follower
@@ -153,7 +175,7 @@ defmodule Server do
             |> State.role(:FOLLOWER)
             |> Timer.restart_election_timer()
 
-        Monitor.send_msg(s, {:PRINT, s.curr_term, "#{s.server_num} dropping down from election"})
+        Monitor.send_msg(s, {:PRINT, s.curr_term, ": #{s.server_num} steps down from election"})
 
 
       # Election timeout when leader, ignore
