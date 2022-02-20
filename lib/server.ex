@@ -97,76 +97,32 @@ defmodule Server do
       {:APPEND_ENTRIES_TIMEOUT, _msg} when s.role == :LEADER -> s
 
       # Vote Request when not leader
-      # TODO: Check against log index -> (voted_for = NIL MUST DO)
       {:VOTE_REQUEST, msg} when s.role != :LEADER ->
-        case {msg.candidate_term, s.voted_for} do
-          {c_term, _} when c_term > s.curr_term ->
-            s = s
-                |> State.curr_term(c_term)
-                |> State.voted_for(msg.candidateP)
-                |> Timer.restart_election_timer()
-                |> print("#{s.server_num} votes for #{msg.debugC}")
-
-            send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term, debugV: s.server_num}})
-            s
-
-          {c_term, nil} when c_term == s.curr_term ->
-            s = s
-                |> State.voted_for(msg.candidateP)
-                |> Timer.restart_election_timer()
-                |> print("#{s.server_num} votes for #{msg.debugC}")
-
-            send(msg.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: c_term, debugV: s.server_num}})
-            s
-
-          _ -> s
-        end
+        s
+        |> Vote.receive_request_send_reply(msg)
 
       # Vote Request when leader
-      {:VOTE_REQUEST, msg} when s.role == :LEADER ->
-        send msg.candidateP, {:HEARTBEAT_REQUEST, s.selfP, s.curr_term}
+      {:VOTE_REQUEST, req} when s.role == :LEADER ->
         s
+        |> Heartbeat.send_heartbeat_request(req)
 
       # Vote reply when candidate
-      {:VOTE_REPLY, msg} when s.role == :CANDIDATE ->
-        s = if msg.curr_term == s.curr_term do
-          s
-          |> State.add_to_voted_by(msg.voteP)
-        else
-          s
-        end
-
-        if State.vote_tally(s) >= s.majority do
-          s
-          |> State.role(:LEADER)
-          |> Timer.restart_heartbeat_timer()
-          |> print("#{s.server_num} won election")
-        else
-          s
-        end
+      {:VOTE_REPLY, vote} when s.role == :CANDIDATE ->
+        s
+        |> Vote.receive_vote_reply(vote)
 
       # Vote reply when not candidate
       {:VOTE_REPLY, _msg} when s.role != :CANDIDATE -> s
 
       # Election timeout when follower
       {:ELECTION_TIMEOUT, _msg} when s.role == :FOLLOWER ->
-        # Start a new election
         s
-        |> State.inc_term()
-        |> State.role(:CANDIDATE)
-        |> State.new_voted_by()
-        |> State.add_to_voted_by(s.selfP)
-        |> State.voted_for(s.selfP)
-        |> Timer.restart_election_timer()
-        |> print("#{s.server_num} stands for election")
-        |> broadcast({:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}})
+        |> Vote.send_vote_request()
 
       # Election timeout when candidate
       {:ELECTION_TIMEOUT, _msg} when s.role == :CANDIDATE ->
         s
-        |> State.role(:FOLLOWER)
-        |> Timer.restart_election_timer()
-        |> print("#{s.server_num} steps down from election")
+        |> Vote.step_down()
 
       # Election timeout when leader
       {:ELECTION_TIMEOUT, _msg} when s.role == :LEADER ->
