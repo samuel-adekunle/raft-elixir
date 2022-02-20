@@ -1,10 +1,10 @@
 
-# distributed algorithms, n.dulay, 10 jan 22 
-# coursework, raft 
+# distributed algorithms, n.dulay, 10 jan 22
+# coursework, raft
 # Makefile, v1
 
-SERVERS   = 3      	
-CLIENTS   = 3      	
+SERVERS   = 4
+CLIENTS   = 3
 
 TIMELIMIT = 15000	# quits after milli-seconds(ms)
 SETUP     = default	# one of default, slower, faster, etc
@@ -41,7 +41,7 @@ run cluster: compile
 	@ ${ELIXIR} server3_${NODE_SUFFIX} ${MIX} cluster_wait &
 	@ ${ELIXIR} server4_${NODE_SUFFIX} ${MIX} cluster_wait &
 	@ ${ELIXIR} server5_${NODE_SUFFIX} ${MIX} cluster_wait &
-	
+
 	@ ${ELIXIR} client1_${NODE_SUFFIX} ${MIX} cluster_wait &
 	@ ${ELIXIR} client2_${NODE_SUFFIX} ${MIX} cluster_wait &
 	@ ${ELIXIR} client3_${NODE_SUFFIX} ${MIX} cluster_wait &
