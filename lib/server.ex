@@ -128,11 +128,12 @@ defmodule Server do
 
   # _________________________________________________________ crash
   def crash(s, duration) do
+    s = s
+        |> print("#{s.server_num} crashing for #{duration}ms")
+        |> Timer.cancel_election_timer()
+        |> Timer.cancel_crash_timer()
     Process.sleep duration
     s
-    |> print("#{s.server_num} crashing for #{duration}ms")
-    |> Timer.cancel_election_timer()
-    |> Timer.cancel_crash_timer()
   end # crash
 
 end # Server

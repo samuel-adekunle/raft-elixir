@@ -8,9 +8,11 @@ defmodule Vote do
 
   # _________________________________________________________ send_vote_request
   def send_vote_request(s) do
-    s_new = s |> start_election()
+    s = s
+        |> start_election()
 
-    s_new |> Server.broadcast({:VOTE_REQUEST, %{candidateP: s_new.selfP, candidate_term: s_new.curr_term, debugC: s_new.server_num}})
+    s
+    |> Server.broadcast({:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}})
   end # send_vote_request
 
   # _________________________________________________________ handle_vote_reply
@@ -27,10 +29,10 @@ defmodule Vote do
   # _________________________________________________________ send_vote_reply
   def send_vote_reply(s, req) do
     s = s
-    |> State.curr_term(req.candidate_term)
-    |> State.voted_for(req.candidateP)
-    |> Timer.restart_election_timer()
-    |> Server.print("#{s.server_num} votes for #{req.debugC}")
+        |> State.curr_term(req.candidate_term)
+        |> State.voted_for(req.candidateP)
+        |> Timer.restart_election_timer()
+        |> Server.print("#{s.server_num} votes for #{req.debugC}")
 
     send(req.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: req.candidate_term, debugV: s.server_num}})
     s

@@ -24,12 +24,6 @@ defmodule Heartbeat do
     if s.curr_term > leader_term do
       s
     else
-      s = s
-          |> State.role(:FOLLOWER)
-          |> State.curr_term(leader_term)
-          |> State.leaderP(leaderP)
-          |> Timer.restart_election_timer()
-
       s = case s.role do
         :LEADER ->
           s
@@ -42,6 +36,12 @@ defmodule Heartbeat do
 
         :FOLLOWER -> s
       end
+
+      s = s
+          |> State.role(:FOLLOWER)
+          |> State.curr_term(leader_term)
+          |> State.leaderP(leaderP)
+          |> Timer.restart_election_timer()
 
       send s.leaderP, {:HEARTBEAT_REPLY, s.selfP}
       s
