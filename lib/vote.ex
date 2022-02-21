@@ -12,7 +12,18 @@ defmodule Vote do
         |> start_election()
 
     s
-    |> Server.broadcast({:VOTE_REQUEST, %{candidateP: s.selfP, candidate_term: s.curr_term, debugC: s.server_num}})
+    |> Server.broadcast(
+         {
+           :VOTE_REQUEST,
+           %{
+             candidateP: s.selfP,
+             candidate_term: s.curr_term,
+             debugC: s.server_num,
+             last_log_index: Log.last_index(s),
+             last_log_term: Log.last_term(s)
+           }
+         }
+       )
   end # send_vote_request
 
   # _________________________________________________________ handle_vote_reply
@@ -34,25 +45,33 @@ defmodule Vote do
         |> Timer.restart_election_timer()
         |> Server.print("#{s.server_num} votes for #{req.debugC}")
 
-    send(req.candidateP, {:VOTE_REPLY, %{voteP: s.selfP, curr_term: req.candidate_term, debugV: s.server_num}})
+    send(
+      req.candidateP,
+      {
+        :VOTE_REPLY,
+        %{
+          voteP: s.selfP,
+          curr_term: req.candidate_term,
+          debugV: s.server_num
+        }
+      }
+    )
     s
   end # send_vote_reply
 
   # _________________________________________________________ handle_request_send_reply
-  # TODO: Check against log index
   def handle_request_send_reply(s, req) do
-    case {req.candidate_term, s.voted_for} do
-      {c_term, _} when c_term > s.curr_term ->
-        s
-        |> State.curr_term(c_term)
-        |> send_vote_reply(req)
+    log_term_behind = req.last_log_term < Log.last_term(s)
+    log_index_behind = req.last_log_term == Log.last_term(s) and req.last_log_index < Log.last_index(s)
+    candidate_term_behind = req.candidate_term < s.curr_term
+    already_voted = req.candidate_term == s.curr_term and (s.voted_for != nil and s.voted_for != req.candidateP)
 
-      {c_term, nil} when c_term == s.curr_term ->
-        s
-        |> State.curr_term(c_term)
-        |> send_vote_reply(req)
-
-      _ -> s
+    if candidate_term_behind or already_voted or log_index_behind or log_term_behind do
+      s
+    else
+      s
+      |> State.curr_term(c_term)
+      |> send_vote_reply(req)
     end
   end # handle_request_send_reply
 

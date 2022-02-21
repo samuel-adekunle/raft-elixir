@@ -18,7 +18,7 @@ defmodule ClientReq do
         s
       :LEADER ->
         s
-        |> Log.append_entry(msg)
+        |> Log.append_entry(%{request: msg, term: s.curr_term})
         |> Server.broadcast({:APPEND_ENTRIES_REQUEST, Map.put(msg, :term, s.curr_term)})
         |> Monitor.send_msg({:CLIENT_REQUEST, s.server_num})
     end
