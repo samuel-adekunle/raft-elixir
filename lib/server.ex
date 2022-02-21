@@ -55,7 +55,9 @@ defmodule Server do
         if s.curr_term > msg.term do
           s
         else
-          # TODO
+          case s.role do
+            : ->
+          end
           s
         end
 

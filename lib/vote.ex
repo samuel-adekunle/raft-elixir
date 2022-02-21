@@ -91,6 +91,8 @@ defmodule Vote do
     if State.vote_tally(s) >= s.majority do
       s
       |> State.role(:LEADER)
+      |> State.init_match_index()
+      |> State.init_next_index()
       |> Timer.restart_heartbeat_timer()
       |> Server.print("#{s.server_num} won election")
     else
