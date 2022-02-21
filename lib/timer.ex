@@ -90,9 +90,8 @@ defmodule Timer do
 
   # _________________________________________________________ start_crash_timer
   def start_crash_timer(s) do
-    {crash_time, crash_duration} = s.config.crash_servers[s.server_num]
-
-    if crash_time != nil do
+    if  s.config.crash_servers[s.server_num] != nil do
+      {crash_time, crash_duration} = s.config.crash_servers[s.server_num]
       crash_timer = Process.send_after(
         s.selfP,
         {:CRASH, crash_duration},

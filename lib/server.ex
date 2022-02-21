@@ -88,7 +88,7 @@ defmodule Server do
       # Election timeout when candidate
       {:ELECTION_TIMEOUT, _msg} when s.role == :CANDIDATE ->
         s
-        |> Vote.step_down()
+        |> Vote.send_vote_request()
 
       # Election timeout when leader
       {:ELECTION_TIMEOUT, _msg} when s.role == :LEADER ->
