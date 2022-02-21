@@ -80,13 +80,8 @@ defmodule Server do
         s
         |> Vote.handle_vote_reply(vote)
 
-      # Election timeout when follower
-      {:ELECTION_TIMEOUT, _msg} when s.role == :FOLLOWER ->
-        s
-        |> Vote.send_vote_request()
-
-      # Election timeout when candidate
-      {:ELECTION_TIMEOUT, _msg} when s.role == :CANDIDATE ->
+      # Election timeout when follower or candidate
+      {:ELECTION_TIMEOUT, _msg} when s.role != :LEADER ->
         s
         |> Vote.send_vote_request()
 
@@ -136,6 +131,7 @@ defmodule Server do
     Process.sleep duration
     s
     |> print("#{s.server_num} crashing for #{duration}ms")
+    |> Timer.cancel_election_timer()
     |> Timer.cancel_crash_timer()
   end # crash
 
