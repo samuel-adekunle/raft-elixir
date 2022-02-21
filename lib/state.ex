@@ -43,7 +43,7 @@ defmodule State do
       commit_index: 0, # index of highest committed entry in server's log
       last_applied: 0, # index of last entry applied to state machine of server
 
-      next_index: Map.new, # foreach follower, index of follower's last known entry+1
+      next_index: Map.new, # for each follower, index of follower's last known entry+1
       match_index: Map.new,
       # index of highest entry known to be replicated at a follower
     }

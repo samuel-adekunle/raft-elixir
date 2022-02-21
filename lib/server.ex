@@ -55,7 +55,7 @@ defmodule Server do
         if s.curr_term > msg.term do
           s
         else
-          # TODO
+          # TODO - handle for leader, follower and candidate
           s
         end
 
