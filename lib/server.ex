@@ -73,7 +73,7 @@ defmodule Server do
       # Vote Request when leader
       {:VOTE_REQUEST, req} when s.role == :LEADER ->
         s
-        |> Heartbeat.send_heartbeat_request(req)
+        |> Heartbeat.send_heartbeat_request(req.candidateP)
 
       # Vote reply
       {:VOTE_REPLY, vote} ->

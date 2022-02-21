@@ -26,7 +26,7 @@ defmodule Vote do
 
   # _________________________________________________________ send_vote_reply
   def send_vote_reply(s, req) do
-    s
+    s = s
     |> State.curr_term(req.candidate_term)
     |> State.voted_for(req.candidateP)
     |> Timer.restart_election_timer()
