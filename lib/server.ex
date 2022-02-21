@@ -24,27 +24,6 @@ defmodule Server do
   # _________________________________________________________ next()
   def next(s) do
     s = receive do
-      # Broadcast heartbeat request when leader
-      {:SEND_HEARTBEAT} when s.role == :LEADER ->
-        s
-        |> Heartbeat.handle_send_heartbeat_send_request()
-
-      # Broadcast heartbeat when not leader
-      {:SEND_HEARTBEAT} when s.role != :LEADER ->
-        s
-        |> Timer.cancel_heartbeat_timer()
-
-      # Heartbeat request
-      {:HEARTBEAT_REQUEST, req} ->
-        s
-        |> Heartbeat.handle_request_send_reply(req)
-
-      # Heartbeat reply when leader
-      # Crashes if received as candidate or follower
-      {:HEARTBEAT_REPLY, _serverP} when s.role == :LEADER ->
-        s
-        |> Heartbeat.handle_heartbeat_reply()
-
       # Crash request
       {:CRASH, duration} ->
         s
@@ -71,14 +50,9 @@ defmodule Server do
       {:APPEND_ENTRIES_TIMEOUT, _msg} when s.role == :LEADER -> s
 
       # Vote Request when not leader
-      {:VOTE_REQUEST, msg} when s.role != :LEADER ->
+      {:VOTE_REQUEST, msg} ->
         s
         |> Vote.handle_request_send_reply(msg)
-
-      # Vote Request when leader
-      {:VOTE_REQUEST, req} when s.role == :LEADER ->
-        s
-        |> Heartbeat.send_heartbeat_request(req.candidateP)
 
       # Vote reply
       {:VOTE_REPLY, vote} ->
@@ -112,7 +86,7 @@ defmodule Server do
 
   # _________________________________________________________ broadcast
   def broadcast(s, message) do
-    if elem(message, 0) != :HEARTBEAT_REQUEST, do: print(s, "#{s.server_num} broadcasts #{inspect message}}")
+    print(s, "#{s.server_num} broadcasts #{inspect message}}")
 
     for server when server != s.selfP <- s.servers do
       send server, message

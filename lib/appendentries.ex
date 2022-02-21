@@ -32,6 +32,36 @@ defmodule AppendEntries do
     # TODO
   end # handle_request_send_reply
 
+  # _________________________________________________________ handle_request_send_reply
+  def handle_request_send_reply(s, req) do
+    {leaderP, leader_term} = req
+    if s.curr_term > leader_term do
+      s
+    else
+      s = case s.role do
+        :LEADER ->
+          s
+          |> Timer.cancel_all_append_entries_timers()
+          |> Server.print("#{s.server_num} got evicted")
+
+        :CANDIDATE ->
+          s
+          |> Server.print("#{s.server_num} steps down from election")
+
+        :FOLLOWER -> s
+      end
+
+      s = s
+          |> State.role(:FOLLOWER)
+          |> State.curr_term(leader_term)
+          |> State.leaderP(leaderP)
+          |> Timer.restart_election_timer()
+
+      # TODO - send reply to leader
+      s
+    end
+  end # handle_request_send_reply
+
 end # AppendEntriess
 
 

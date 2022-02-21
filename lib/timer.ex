@@ -64,30 +64,6 @@ defmodule Timer do
     |> State.append_entries_timers()                        # now reset to Map.new
   end # cancel_all_append_entries_timers
 
-  # _________________________________________________________ restart_heartbeat_timer
-  def restart_heartbeat_timer(s) do
-    s = s
-        |> Timer.cancel_election_timer()
-
-    heartbeat_timer = Process.send_after(
-      s.selfP,
-      {:SEND_HEARTBEAT},
-      s.config.heartbeat_interval
-    )
-
-    s
-    |> State.heartbeat_timer(heartbeat_timer)
-  end # restart_heartbeat_timer
-
-  # _________________________________________________________ cancel_heartbeat_timer
-  def cancel_heartbeat_timer(s) do
-    if s.heartbeat_timer do
-      Process.cancel_timer(s.heartbeat_timer)
-    end
-    s
-    |> State.heartbeat_timer(nil)
-  end # cancel_heartbeat_timer
-
   # _________________________________________________________ start_crash_timer
   def start_crash_timer(s) do
     if  s.config.crash_servers[s.server_num] != nil do

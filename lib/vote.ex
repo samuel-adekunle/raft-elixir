@@ -69,8 +69,12 @@ defmodule Vote do
     if candidate_term_behind or already_voted or log_index_behind or log_term_behind do
       s
     else
+      if s.role != :FOLLOWER do
+        Server.print(s, "#{s.server_num} either steps down or is evicted")
+      end
       s
       |> State.curr_term(req.candidate_term)
+      |> State.role(:FOLLOWER)
       |> send_vote_reply(req)
     end
   end # handle_request_send_reply
@@ -112,12 +116,23 @@ defmodule Vote do
       |> State.role(:LEADER)
       |> State.init_match_index()
       |> State.init_next_index()
-      |> Timer.restart_heartbeat_timer()
+      |> Vote.restart_all_append_entries_timers()
       |> Server.print("#{s.server_num} won election")
     else
       s
     end
   end # tally_votes
+
+  defp restart_all_append_entries_timers(s) do
+    List.fold(
+      s.servers,
+      s,
+      fn
+        followerP, state when followerP != s.selfP -> Timer.restart_append_entries_timer(state, followerP)
+        _, state -> state
+      end
+    )
+  end
 
 end # Vote
 

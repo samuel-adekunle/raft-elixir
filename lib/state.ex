@@ -23,13 +23,11 @@ defmodule State do
 
       # ______________ elections ____________________________
       election_timer: nil, # one timer for all peers
-      curr_election: 0, # used to drop old electionTimeout messages and votereplies
+      curr_election: 0, # used to drop old electionTimeout messages and vote replies
       voted_for: nil, # num of candidate that been granted vote incl self
       voted_by: MapSet.new, # set of processes that have voted for candidate incl. candidate
 
       append_entries_timers: Map.new, # one timer for each follower
-
-      heartbeat_timer: nil, # timer for sending heartbeats as leader
 
       crash_timer: nil, # timer for temporarily crashing servers
 
@@ -62,7 +60,6 @@ defmodule State do
   def add_to_voted_by(s, v), do: Map.put(s, :voted_by, MapSet.put(s.voted_by, v))
   def vote_tally(s), do: MapSet.size(s.voted_by)
 
-  def heartbeat_timer(s, v), do: Map.put(s, :heartbeat_timer, v)
   def crash_timer(s, v), do: Map.put(s, :crash_timer, v)
 
   def append_entries_timers(s),
