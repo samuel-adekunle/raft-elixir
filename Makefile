@@ -3,8 +3,8 @@
 # coursework, raft
 # Makefile, v1
 
-SERVERS   = 10
-CLIENTS   = 3
+SERVERS   = 3
+CLIENTS   = 1
 
 TIMELIMIT = 15000	# quits after milli-seconds(ms)
 SETUP     = default	# one of default, slower, faster, etc

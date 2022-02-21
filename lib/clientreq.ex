@@ -7,7 +7,21 @@ defmodule ClientReq do
 
   # s = server process state (c.f. self/this)
 
-  # omitted
+  # _________________________________________________________ handle_request_send_reply
+  def handle_request_send_reply(s, msg) do
+    case s.role do
+      :FOLLOWER ->
+        send msg.clientP, {:CLIENT_REPLY, {msg.cid, :NOT_LEADER, s.leaderP}}
+        s
+      :CANDIDATE ->
+        send msg.clientP, {:CLIENT_REPLY, {msg.cid, :NOT_LEADER, nil}}
+        s
+      :LEADER ->
+        s
+        |> Server.broadcast({:APPEND_ENTRIES_REQUEST, Map.put(msg, :term, s.curr_term)})
+        |> Monitor.send_msg({:CLIENT_REQUEST, s.server_num})
+    end
+  end # handle_request_send_reply
 
 end # Clientreq
 

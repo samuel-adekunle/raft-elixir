@@ -50,10 +50,15 @@ defmodule Server do
         s
         |> crash(duration)
 
-      # Append Entries request when not leader
-      # Crashes if received as a leader
-      # TODO
-      {:APPEND_ENTRIES_REQUEST, _msg} when s.role != :LEADER -> s
+      # Append Entries request
+      {:APPEND_ENTRIES_REQUEST, msg} ->
+        if s.curr_term > msg.term do
+          s
+        else
+          # TODO
+          s
+        end
+
 
       # Append Entries reply when leader
       # Crashes if received as candidate or follower
@@ -90,17 +95,10 @@ defmodule Server do
         s
         |> Timer.cancel_election_timer()
 
-      # Client Request to leader
-      # TODO
-      {:CLIENT_REQUEST, _msg} when s.role == :LEADER -> s
-
-      # Client Request to follower
-      # TODO
-      {:CLIENT_REQUEST, _msg} when s.role == :FOLLOWER -> s
-
-      # Client Request to candidate
-      # TODO
-      {:CLIENT_REQUEST, _msg} when s.role == :CANDIDATE -> s
+      # Client Request
+      {:CLIENT_REQUEST, msg} ->
+        s
+        |> ClientReq.handle_request_send_reply(msg)
 
       unexpected ->
         Helper.node_halt(inspect unexpected)
@@ -114,6 +112,8 @@ defmodule Server do
 
   # _________________________________________________________ broadcast
   def broadcast(s, message) do
+    if elem(message, 0) != :HEARTBEAT_REQUEST, do: print(s, "#{s.server_num} broadcasts #{inspect message}}")
+    
     for server when server != s.selfP <- s.servers do
       send server, message
     end
