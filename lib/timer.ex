@@ -46,6 +46,17 @@ defmodule Timer do
     |> Debug.message("+atim", {{:APPEND_ENTRIES_TIMEOUT, s.curr_term, followerP}, s.config.append_entries_timeout})
   end # restart_append_entries_timer
 
+  def restart_all_append_entries_timers(s) do
+    List.fold(
+      s.servers,
+      s,
+      fn
+        followerP, state when followerP != s.selfP -> Timer.restart_append_entries_timer(state, followerP)
+        _, state -> state
+      end
+    )
+  end
+
   # _________________________________________________________ cancel_append_entries_timer()
   def cancel_append_entries_timer(s, followerP) do
     if s.append_entries_timers[followerP] do

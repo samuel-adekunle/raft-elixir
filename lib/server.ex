@@ -31,23 +31,24 @@ defmodule Server do
 
       # Append Entries request
       {:APPEND_ENTRIES_REQUEST, msg} ->
-        if s.curr_term > msg.term do
-          s
-        else
-          # TODO - handle for leader, follower and candidate
-          s
-        end
+        s
+        |> AppendEntries.handle_request_send_reply(msg)
 
-
-      # Append Entries reply when leader
-      # Crashes if received as candidate or follower
-      # TODO
-      {:APPEND_ENTRIES_REPLY, _msg} when s.role == :LEADER -> s
 
       # Append Entries timeout when leader
+      {:APPEND_ENTRIES_TIMEOUT, term, followerP} when s.role == :LEADER ->
+        s
+        |> AppendEntries.handle_timeout(term, followerP)
+
+      # Append Entries timeout when not leader
+      {:APPEND_ENTRIES_TIMEOUT, term, followerP} when s.role != :LEADER ->
+        s
+        |> Timer.cancel_all_append_entries_timers()
+
+      # Append Entries  when leader
       # Crashes if received as candidate or follower
-      # TODO
-      {:APPEND_ENTRIES_TIMEOUT, _msg} when s.role == :LEADER -> s
+      # TODO - handle reply as leader
+      {:APPEND_ENTRIES_REPLY, _msg} when s.role == :LEADER -> s
 
       # Vote Request when not leader
       {:VOTE_REQUEST, msg} ->

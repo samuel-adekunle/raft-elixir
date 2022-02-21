@@ -18,7 +18,7 @@ defmodule ClientReq do
         s
       :LEADER ->
         s
-        |> AppendEntries.send_append_entries_request(msg)
+        |> Log.append_entry(%{request: msg, term: s.curr_term})
         |> Monitor.send_msg({:CLIENT_REQUEST, s.server_num})
     end
   end # handle_request_send_reply
