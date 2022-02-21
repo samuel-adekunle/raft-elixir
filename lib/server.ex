@@ -55,9 +55,7 @@ defmodule Server do
         if s.curr_term > msg.term do
           s
         else
-          case s.role do
-            : ->
-          end
+          # TODO
           s
         end
 
@@ -115,7 +113,7 @@ defmodule Server do
   # _________________________________________________________ broadcast
   def broadcast(s, message) do
     if elem(message, 0) != :HEARTBEAT_REQUEST, do: print(s, "#{s.server_num} broadcasts #{inspect message}}")
-    
+
     for server when server != s.selfP <- s.servers do
       send server, message
     end

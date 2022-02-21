@@ -70,7 +70,7 @@ defmodule Vote do
       s
     else
       s
-      |> State.curr_term(c_term)
+      |> State.curr_term(req.candidate_term)
       |> send_vote_reply(req)
     end
   end # handle_request_send_reply

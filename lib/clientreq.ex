@@ -17,6 +17,7 @@ defmodule ClientReq do
         send msg.clientP, {:CLIENT_REPLY, {msg.cid, :NOT_LEADER, nil}}
         s
       :LEADER ->
+        # TODO
         s
         |> Log.append_entry(%{request: msg, term: s.curr_term})
         |> Server.broadcast({:APPEND_ENTRIES_REQUEST, Map.put(msg, :term, s.curr_term)})
