@@ -129,7 +129,8 @@ defmodule AppendEntries do
 
   defp handle_append_entries_request(s, msg) do
         Server.print(s, "#{s.server_num} received #{inspect msg}")
-        Server.print(s, "#{s.server_num} entries is #{inspect s.log}")
+        Server.print(s, "#{s.server_num} entries is #{inspect Map.keys(s.log)}")
+        Server.print(s, "#{inspect Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1)}")
     conflicting_index = Enum.find(
       Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1),
       fn index -> Log.term_at(s, index) != msg.entries[index].term end
