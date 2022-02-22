@@ -104,6 +104,7 @@ defmodule Vote do
 
   # _________________________________________________________ add_vote
   defp add_vote(s, vote) do
+    # TODO - handle other term cases
     if vote.curr_term == s.curr_term do
       s
       |> State.add_to_voted_by(vote.voteP)

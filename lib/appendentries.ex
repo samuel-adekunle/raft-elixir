@@ -6,8 +6,64 @@ defmodule AppendEntries do
 
   # s = server process state (c.f. this/self)
 
+  def handle_append_entries_reply(s, msg) do
+    if msg.success do
+      s = s
+          |> State.next_index(msg.followerP, s.next_index[msg.followerP] + 1)
+          |> State.match_index(msg.followerP, s.match_index[msg.followerP] + 1)
+
+      # check for majority and commit and then send to the client if we've commit it
+      # If there exists an N such that N > commitIndex, a majority
+      # of matchIndex[i] ≥ N, and log[N].term == currentTerm:
+      # set commitIndex = N (§5.3, §5.4).
+      new_commit_index = Enum.reduce_while(
+        s.commit_index + 1..Log.last_index(s),
+        0,
+        fn x, acc ->
+          if commit(s, x), do: {:cont, x}, else: {:halt, acc}
+        end
+      )
+      s
+      |> State.commit_index(new_commit_index)
+      |> handle_timeout(s.curr_term, msg.followerP)
+    else
+      if msg.term > s.curr_term do
+        # step down
+        Server.print(s, "#{s.server_num} is evicted")
+        s
+        |> State.role(:FOLLOWER)
+        |> Timer.cancel_all_append_entries_timers()
+        |> Timer.restart_election_timer()
+      else
+        # send app entries req with dec. nextIndex
+        s = s
+            |> State.next_index(msg.followerP, s.next_index[msg.followerP] - 1)
+        handle_timeout(s, s.curr_term, msg.followerP)
+      end
+    end
+  end
+
+  defp commit(s, n) do
+    #    sum = Enum.Reduce(s.match_index, 0, fn {_, mIndex}, sum -> if mIndex > n, do: sum+1, else: sum end)
+
+    sum = Enum.reduce(
+      s.match_index,
+      0,
+      fn {_, m_index}, acc -> if m_index >= n do
+                                acc + 1
+                              else
+                                acc
+                              end
+      end
+    )
+    is_maj_replicated = sum >= s.majority
+    is_of_term = Log.term_at(s, n) == s.curr_term
+    is_maj_replicated and is_of_term
+  end
+
   # Assumes you're a leader
-  def handle_timeout(s, term, followerP) do
+  def handle_timeout(s, _term, followerP) do
+#    Server.print(s, "#{s.server_num}'s log #{inspect s.log}, next index is #{inspect s.next_index}")
     {entries, prev_log_index} =
       if Log.last_index(s) >= s.next_index[followerP] do
         new_entries =
@@ -24,7 +80,7 @@ defmodule AppendEntries do
 
   # _________________________________________________________ send_append_entries_request
   defp send_append_entries_request(s, entries, prev_log_index, followerP) do
-    send followerP, {
+    request = {
       :APPEND_ENTRIES_REQUEST,
       %{
         entries: entries,
@@ -35,6 +91,8 @@ defmodule AppendEntries do
         prev_log_term: Log.term_at(s, prev_log_index)
       }
     }
+    send followerP, request
+    s
   end # send_append_entries_request
 
   # _________________________________________________________ send_append_entries_request
@@ -47,6 +105,7 @@ defmodule AppendEntries do
         success: success
       }
     }
+    s
   end # send_append_entries_request
 
 
@@ -69,14 +128,19 @@ defmodule AppendEntries do
   end # handle_request_send_reply
 
   defp handle_append_entries_request(s, msg) do
+        Server.print(s, "#{s.server_num} received #{inspect msg}")
+        Server.print(s, "#{s.server_num} entries is #{inspect s.log}")
     conflicting_index = Enum.find(
-      Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)),
+      Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1),
       fn index -> Log.term_at(s, index) != msg.entries[index].term end
     )
-
     s =
-      s
-      |> Log.delete_entries_from(conflicting_index)
+      if conflicting_index != nil do
+        s
+        |> Log.delete_entries_from(conflicting_index)
+      else
+        s
+      end
       |> Log.merge_entries(msg.entries)
 
     if msg.leader_commit_index > s.commit_index do

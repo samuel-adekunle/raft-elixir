@@ -48,7 +48,9 @@ defmodule Server do
       # Append Entries  when leader
       # Crashes if received as candidate or follower
       # TODO - handle reply as leader
-      {:APPEND_ENTRIES_REPLY, _msg} when s.role == :LEADER -> s
+      {:APPEND_ENTRIES_REPLY, msg} when s.role == :LEADER ->
+        s
+        |> AppendEntries.handle_append_entries_reply(msg)
 
       # Vote Request when not leader
       {:VOTE_REQUEST, msg} ->
