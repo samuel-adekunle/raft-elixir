@@ -18,7 +18,7 @@ defmodule AppendEntries do
       # set commitIndex = N (§5.3, §5.4).
       new_commit_index = Enum.reduce_while(
         s.commit_index + 1..Log.last_index(s),
-        0,
+        s.commit_index,
         fn x, acc ->
           if commit(s, x), do: {:cont, x}, else: {:halt, acc}
         end
@@ -63,16 +63,16 @@ defmodule AppendEntries do
 
   # Assumes you're a leader
   def handle_timeout(s, _term, followerP) do
-#    Server.print(s, "#{s.server_num}'s log #{inspect s.log}, next index is #{inspect s.next_index}")
+    #    Server.print(s, "#{s.server_num}'s log #{inspect s.log}, next index is #{inspect s.next_index}")
     {entries, prev_log_index} =
       if Log.last_index(s) >= s.next_index[followerP] do
         new_entries =
           for index <- s.next_index[followerP]..Log.last_index(s), into: Map.new, do: {index, Log.entry_at(s, index)}
         {new_entries, s.next_index[followerP] - 1}
       else
-        {%{}, 0}
+        {%{}, s.next_index[followerP] - 1}
       end
-
+    Server.print(s, "Next Index: #{inspect s.next_index}")
     s
     |> send_append_entries_request(entries, prev_log_index, followerP)
     |> Timer.restart_append_entries_timer(followerP)
@@ -80,6 +80,7 @@ defmodule AppendEntries do
 
   # _________________________________________________________ send_append_entries_request
   defp send_append_entries_request(s, entries, prev_log_index, followerP) do
+    Server.print(s, "#{s.server_num} - #{inspect entries}, #{prev_log_index}}")
     request = {
       :APPEND_ENTRIES_REQUEST,
       %{
@@ -128,9 +129,9 @@ defmodule AppendEntries do
   end # handle_request_send_reply
 
   defp handle_append_entries_request(s, msg) do
-        Server.print(s, "#{s.server_num} received #{inspect msg}")
-        Server.print(s, "#{s.server_num} entries is #{inspect Map.keys(s.log)}")
-        Server.print(s, "#{inspect Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1)}")
+    Server.print(s, "#{s.server_num} received #{inspect msg}")
+    Server.print(s, "#{s.server_num} entries is #{inspect Map.keys(s.log)}")
+    Server.print(s, "#{inspect Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1)}")
     conflicting_index = Enum.find(
       Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1),
       fn index -> Log.term_at(s, index) != msg.entries[index].term end
