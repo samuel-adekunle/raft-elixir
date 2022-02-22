@@ -74,8 +74,10 @@ defmodule AppendEntries do
       fn index -> Log.term_at(s, index) != msg.entries[index].term end
     )
 
-    s.log = Log.delete_entries_from(s, conflicting_index)
-    s.log = Log.merge_entries(s, msg.entries)
+    s =
+      s
+      |> Log.delete_entries_from(conflicting_index)
+      |> Log.merge_entries(msg.entries)
 
     if msg.leader_commit_index > s.commit_index do
       new_commit_index = min(msg.leader_commit_index, Log.last_index(s))

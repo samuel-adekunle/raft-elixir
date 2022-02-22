@@ -36,12 +36,12 @@ defmodule Server do
 
 
       # Append Entries timeout when leader
-      {:APPEND_ENTRIES_TIMEOUT, term, followerP} when s.role == :LEADER ->
+      {:APPEND_ENTRIES_TIMEOUT, {term, followerP}} when s.role == :LEADER ->
         s
         |> AppendEntries.handle_timeout(term, followerP)
 
       # Append Entries timeout when not leader
-      {:APPEND_ENTRIES_TIMEOUT, term, followerP} when s.role != :LEADER ->
+      {:APPEND_ENTRIES_TIMEOUT, _msg} when s.role != :LEADER ->
         s
         |> Timer.cancel_all_append_entries_timers()
 

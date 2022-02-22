@@ -47,7 +47,7 @@ defmodule Timer do
   end # restart_append_entries_timer
 
   def restart_all_append_entries_timers(s) do
-    List.fold(
+    List.foldl(
       s.servers,
       s,
       fn
