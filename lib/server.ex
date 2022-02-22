@@ -45,12 +45,13 @@ defmodule Server do
         s
         |> Timer.cancel_all_append_entries_timers()
 
-      # Append Entries  when leader
-      # Crashes if received as candidate or follower
-      # TODO - handle reply as leader
+      # Append Entries when leader
       {:APPEND_ENTRIES_REPLY, msg} when s.role == :LEADER ->
         s
         |> AppendEntries.handle_append_entries_reply(msg)
+
+      # Append Entries after eviction
+      {:APPEND_ENTRIES_REPLY, _msg} when s.role != :LEADER -> s
 
       # Vote Request when not leader
       {:VOTE_REQUEST, msg} ->
@@ -76,6 +77,17 @@ defmodule Server do
       {:CLIENT_REQUEST, msg} ->
         s
         |> ClientReq.handle_request_send_reply(msg)
+
+      # DB Reply, ignored for now
+      {:DB_REPLY, :OK} ->
+        s = s
+            |> State.last_applied(s.last_applied + 1)
+
+        if s.role == :LEADER do
+          client = Log.entry_at(s, s.last_applied).request
+          send client.clientP, {:CLIENT_REPLY, {client.cid, :OK, s.selfP}}
+        end
+        s
 
       unexpected ->
         Helper.node_halt(inspect unexpected)

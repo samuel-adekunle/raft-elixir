@@ -5,24 +5,29 @@
 defmodule AppendEntries do
 
   # s = server process state (c.f. this/self)
-
   def handle_append_entries_reply(s, msg) do
     if msg.success do
-      s = s
-          |> State.next_index(msg.followerP, s.next_index[msg.followerP] + 1)
-          |> State.match_index(msg.followerP, s.match_index[msg.followerP] + 1)
+      s =
+        s
+        |> State.next_index(msg.followerP, msg.last_index + 1)
+        |> State.match_index(msg.followerP, msg.last_index)
 
       # check for majority and commit and then send to the client if we've commit it
       # If there exists an N such that N > commitIndex, a majority
       # of matchIndex[i] ≥ N, and log[N].term == currentTerm:
       # set commitIndex = N (§5.3, §5.4).
       new_commit_index = Enum.reduce_while(
-        s.commit_index + 1..Log.last_index(s),
+        s.commit_index + 1..Log.last_index(s)//1,
         s.commit_index,
-        fn x, acc ->
-          if commit(s, x), do: {:cont, x}, else: {:halt, acc}
+        fn current_index, acc ->
+          if commit(s, current_index), do: {:cont, current_index}, else: {:halt, acc}
         end
       )
+
+      for index <- s.commit_index + 1..new_commit_index//1 do
+        send s.databaseP, {:DB_REQUEST, Log.entry_at(s, index).request}
+      end
+
       s
       |> State.commit_index(new_commit_index)
       |> handle_timeout(s.curr_term, msg.followerP)
@@ -43,21 +48,17 @@ defmodule AppendEntries do
     end
   end
 
-  defp commit(s, n) do
-    #    sum = Enum.Reduce(s.match_index, 0, fn {_, mIndex}, sum -> if mIndex > n, do: sum+1, else: sum end)
-
-    sum = Enum.reduce(
+  # try to commit an index
+  defp commit(s, index) do
+    count = Enum.reduce(
       s.match_index,
       0,
-      fn {_, m_index}, acc -> if m_index >= n do
-                                acc + 1
-                              else
-                                acc
-                              end
+      fn {_, m_index}, acc ->
+        if m_index >= index, do: acc + 1, else: acc
       end
     )
-    is_maj_replicated = sum >= s.majority
-    is_of_term = Log.term_at(s, n) == s.curr_term
+    is_maj_replicated = count >= s.majority
+    is_of_term = Log.term_at(s, index) == s.curr_term
     is_maj_replicated and is_of_term
   end
 
@@ -72,7 +73,11 @@ defmodule AppendEntries do
       else
         {%{}, s.next_index[followerP] - 1}
       end
-    Server.print(s, "Next Index: #{inspect s.next_index}")
+
+    if map_size(entries) > 0 do
+      Server.print(s, "#{s.server_num} has next index #{inspect s.next_index}")
+    end
+
     s
     |> send_append_entries_request(entries, prev_log_index, followerP)
     |> Timer.restart_append_entries_timer(followerP)
@@ -80,7 +85,9 @@ defmodule AppendEntries do
 
   # _________________________________________________________ send_append_entries_request
   defp send_append_entries_request(s, entries, prev_log_index, followerP) do
-    Server.print(s, "#{s.server_num} - #{inspect entries}, #{prev_log_index}}")
+    if map_size(entries) > 0 do
+      Server.print(s, "#{s.server_num} sends append #{inspect entries} from index #{prev_log_index}")
+    end
     request = {
       :APPEND_ENTRIES_REQUEST,
       %{
@@ -103,6 +110,7 @@ defmodule AppendEntries do
       %{
         followerP: s.selfP,
         term: s.curr_term,
+        last_index: Log.last_index(s),
         success: success
       }
     }
@@ -116,22 +124,29 @@ defmodule AppendEntries do
     entry_at_prev_index = Log.entry_at(s, msg.prev_log_index)
     prev_log_mismatch = (entry_at_prev_index != nil) and (entry_at_prev_index.term != msg.prev_log_term)
 
-    if leader_term_behind or prev_log_mismatch do
+    if leader_term_behind do
       s
-      |> handle_heartbeat(msg.leaderP, max(msg.term, s.curr_term))
       |> send_append_entries_reply(msg, false)
     else
-      s
-      |> handle_append_entries_request(msg)
-      |> handle_heartbeat(msg.leaderP, msg.term)
-      |> send_append_entries_reply(msg, true)
+      if prev_log_mismatch do
+        s
+        |> handle_heartbeat(msg.leaderP, max(msg.term, s.curr_term))
+        |> send_append_entries_reply(msg, false)
+      else
+        s
+        |> handle_append_entries_request(msg)
+        |> handle_heartbeat(msg.leaderP, msg.term)
+        |> send_append_entries_reply(msg, true)
+      end
     end
   end # handle_request_send_reply
 
   defp handle_append_entries_request(s, msg) do
-    Server.print(s, "#{s.server_num} received #{inspect msg}")
-    Server.print(s, "#{s.server_num} entries is #{inspect Map.keys(s.log)}")
-    Server.print(s, "#{inspect Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1)}")
+    if map_size(msg.entries) > 0 do
+      Server.print(s, "#{s.server_num} received #{inspect msg}")
+      Server.print(s, "#{s.server_num} has log #{inspect s.log}")
+    end
+
     conflicting_index = Enum.find(
       Enum.to_list(msg.prev_log_index + 1..Log.last_index(s)//1),
       fn index -> Log.term_at(s, index) != msg.entries[index].term end

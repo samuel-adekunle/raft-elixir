@@ -83,7 +83,7 @@ defmodule State do
 
   def init_next_index(s) do
     v = Log.last_index(s) + 1
-    new_next_index = for server <- s.servers, into: Map.new do
+    new_next_index = for server when server != s.selfP <- s.servers, into: Map.new do
       {server, v}
     end
     s
@@ -91,7 +91,7 @@ defmodule State do
   end # init_next_index
 
   def init_match_index(s) do
-    new_match_index = for server <- s.servers, into: Map.new do
+    new_match_index = for server when server != s.selfP <- s.servers, into: Map.new do
       {server, 0} end
     s
     |> State.match_index(new_match_index)
